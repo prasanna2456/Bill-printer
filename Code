@@ -1,0 +1,234 @@
+#include <WiFi.h>
+#include "WiFiClientSecure.h"
+#include "Adafruit_MQTT.h"
+#include "Adafruit_MQTT_Client.h"
+#include "Adafruit_Thermal.h"
+
+// Printer Initialization
+Adafruit_Thermal printer(&Serial2);
+
+// Wi-Fi and MQTT Configurations
+#define WLAN_SSID "vivo T1"
+#define WLAN_PASS "aaaaaaaa"
+#define AIO_SERVER          "io.adafruit.com"
+#define AIO_SERVERPORT      1883
+#define AIO_USERNAME        "Enter_username"
+#define AIO_KEY             "enter_key"
+#define FEED_NAME           "amount"  // Amount feed (order details)
+#define PAY_STATUS_FEED     "payment" // Payment status feed
+
+// Global Declarations
+WiFiClient client;
+Adafruit_MQTT_Client mqtt(&client, AIO_SERVER, AIO_SERVERPORT, AIO_USERNAME, AIO_KEY);
+Adafruit_MQTT_Subscribe receiptData = Adafruit_MQTT_Subscribe(&mqtt, AIO_USERNAME "/feeds/" FEED_NAME);
+Adafruit_MQTT_Subscribe paymentStatusData = Adafruit_MQTT_Subscribe(&mqtt, AIO_USERNAME "/feeds/" PAY_STATUS_FEED);
+
+// Button GPIO Pin Assignments
+#define BTN_ITEM_1   12
+#define BTN_ITEM_2   13
+#define BTN_INC      25
+#define BTN_DEC      26
+#define BTN_CONFIRM  27
+#define BTN_CANCEL   33
+
+// Variables
+int quantities[2] = {0, 0}; // Quantities for Item 1 and Item 2
+float itemPrices[2] = {0.7, 0.3}; // Prices for Item 1 and Item 2
+bool isConfirmed = false;
+
+// Debounce time
+unsigned long lastButtonPress[5] = {0, 0, 0, 0, 0};
+const unsigned long debounceDelay = 300;  // milliseconds
+
+void MQTT_connect();
+
+void setup() {
+  Serial.begin(115200);
+  Serial2.begin(9600);
+
+  // Printer Setup
+  printer.begin();
+  printer.setFont('A');
+  printer.setSize('S');
+  printer.justify('L');
+
+  Serial.println(F("Shop Receipt Example Code"));
+
+  // Wi-Fi Setup
+  WiFi.begin(WLAN_SSID, WLAN_PASS);
+  delay(2000);
+
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println();
+  Serial.println("WiFi connected");
+  Serial.println("IP address: ");
+  Serial.println(WiFi.localIP());
+
+  mqtt.subscribe(&receiptData);
+  mqtt.subscribe(&paymentStatusData);  // Subscribe to payment status feed
+
+  // Button Initialization
+  pinMode(BTN_ITEM_1, INPUT_PULLUP);
+  pinMode(BTN_ITEM_2, INPUT_PULLUP);
+  pinMode(BTN_INC, INPUT_PULLUP);
+  pinMode(BTN_DEC, INPUT_PULLUP);
+  pinMode(BTN_CONFIRM, INPUT_PULLUP);
+  pinMode(BTN_CANCEL, INPUT_PULLUP);
+}
+
+void loop() {
+  MQTT_connect();
+
+  // Handle button presses with debounce logic
+  if (digitalRead(BTN_ITEM_1) == LOW && (millis() - lastButtonPress[0]) > debounceDelay) {
+    lastButtonPress[0] = millis();  // Record time of button press
+    incrementQuantity(1);
+  }
+  if (digitalRead(BTN_ITEM_2) == LOW && (millis() - lastButtonPress[1]) > debounceDelay) {
+    lastButtonPress[1] = millis();  // Record time of button press
+    incrementQuantity(2);
+  }
+  if (digitalRead(BTN_DEC) == LOW && (millis() - lastButtonPress[2]) > debounceDelay) {
+    lastButtonPress[2] = millis();  // Record time of button press
+    decrementQuantity();
+  }
+  if (digitalRead(BTN_CONFIRM) == LOW && (millis() - lastButtonPress[3]) > debounceDelay) {
+    lastButtonPress[3] = millis();  // Record time of button press
+    confirmOrder();
+  }
+  if (digitalRead(BTN_CANCEL) == LOW && (millis() - lastButtonPress[4]) > debounceDelay) {
+    lastButtonPress[4] = millis();  // Record time of button press
+    cancelOrder();
+  }
+
+  // MQTT Subscription Logic
+  Adafruit_MQTT_Subscribe *subscription;
+  while ((subscription = mqtt.readSubscription(5000))) {
+    if (subscription == &receiptData) {
+      String data = (char *)receiptData.lastread;
+      Serial.println("MQTT Data Received: " + data);
+    }
+    if (subscription == &paymentStatusData) {
+      String paymentStatus = (char *)paymentStatusData.lastread;
+      Serial.println("Payment Status: " + paymentStatus);
+      if (paymentStatus == "true") {
+        // Payment confirmed, print the receipt
+        printReceipt();
+      } else {
+        Serial.println("Payment not received yet.");
+      }
+    }
+  }
+}
+
+void incrementQuantity(int item) {
+  quantities[item - 1]++;
+  Serial.println("Item " + String(item) + " Quantity: " + String(quantities[item - 1]));
+  displayPrice();
+}
+
+void decrementQuantity() {
+  for (int i = 0; i < 2; i++) {
+    if (quantities[i] > 0) {
+      quantities[i]--;
+      Serial.println("Item " + String(i + 1) + " Quantity: " + String(quantities[i]));
+      displayPrice();
+      break;
+    }
+  }
+}
+
+void confirmOrder() {
+  bool hasOrder = false;
+
+  // Check if at least one item has been selected
+  for (int i = 0; i < 2; i++) {
+    if (quantities[i] > 0) {
+      hasOrder = true;
+      break;
+    }
+  }
+
+  if (hasOrder) {
+    isConfirmed = true;
+    Serial.println("Order Confirmed!");
+
+    // Publish payment pending status to the payment feed
+    Adafruit_MQTT_Publish paymentStatus = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/" PAY_STATUS_FEED);
+    paymentStatus.publish("pending");
+
+    Serial.println("Waiting for payment confirmation...");
+  } else {
+    Serial.println("No items selected!");
+  }
+}
+
+void cancelOrder() {
+  for (int i = 0; i < 2; i++) {
+    quantities[i] = 0;
+  }
+  isConfirmed = false;
+  Serial.println("Order Canceled");
+  displayPrice();
+}
+
+void displayPrice() {
+  float totalPrice = 0.0;
+
+  // Calculate total price for each item
+  for (int i = 0; i < 2; i++) {
+    totalPrice += itemPrices[i] * quantities[i];
+  }
+
+  Serial.println("Total Price: $" + String(totalPrice, 2));
+}
+
+void printReceipt() {
+  float totalPrice = 0.0;
+
+  printer.justify('C');
+  printer.println(F("Shop Receipt"));
+  printer.println(F("----------------------------"));
+  printer.justify('L');
+
+  // Add details for each item
+  for (int i = 0; i < 2; i++) {
+    if (quantities[i] > 0) {
+      printer.println("Item " + String(i + 1));
+      printer.println("Quantity: " + String(quantities[i]));
+      printer.println("Price (each): $" + String(itemPrices[i], 2));
+      totalPrice += itemPrices[i] * quantities[i];
+    }
+  }
+
+  printer.println("Total Price: $" + String(totalPrice, 2));
+  printer.println(F("----------------------------"));
+  printer.feed(2); // Advance paper
+}
+
+void MQTT_connect() {
+  int8_t ret;
+
+  if (mqtt.connected()) {
+    return;
+  }
+
+  Serial.print("Connecting to MQTT... ");
+
+  uint8_t retries = 3;
+  while ((ret = mqtt.connect()) != 0) {
+    Serial.println(mqtt.connectErrorString(ret));
+    Serial.println("Retrying MQTT connection in 5 seconds...");
+    mqtt.disconnect();
+    delay(5000);
+    retries--;
+    if (retries == 0) {
+      while (1);  // Block here if connection fails
+    }
+  }
+
+  Serial.println("MQTT Connected!");
+}
