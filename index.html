@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Smart Food Court — Annapoorna & KFC</title>
+  <style>
+    body {
+      font-family: 'Inter', Arial, sans-serif;
+      background: #f6f8fa;
+      margin: 0;
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+    }
+    .sidebar {
+      width: 20%;
+      background: #fff;
+      border-right: 2px solid #e5e5e5;
+      padding: 20px;
+      box-shadow: 2px 0 5px rgba(0,0,0,0.05);
+    }
+    .shop-card {
+      cursor: pointer;
+      border: 1px solid #ccc;
+      border-radius: 12px;
+      overflow: hidden;
+      margin-bottom: 15px;
+      transition: 0.3s;
+    }
+    .shop-card:hover { transform: scale(1.03); border-color: #007bff; }
+    .shop-card img { width: 100%; height: 130px; object-fit: cover; }
+    .shop-card h3 { text-align: center; margin: 10px 0; color: #333; }
+    .menu-section { width: 50%; padding: 20px; overflow-y: auto; }
+    .menu-title { font-size: 24px; font-weight: bold; margin-bottom: 10px; }
+    .menu-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 20px; }
+    .item-card {
+      background: #fff; border-radius: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      text-align: center; padding: 10px; transition: 0.3s;
+    }
+    .item-card img { width: 100%; height: 120px; border-radius: 10px; object-fit: cover; }
+    .item-card h4 { margin: 8px 0 4px; }
+    .qty-controls { display: flex; justify-content: center; align-items: center; margin-top: 8px; }
+    .qty-controls button {
+      background: #007bff; color: #fff; border: none; border-radius: 6px;
+      padding: 5px 10px; margin: 0 5px; cursor: pointer;
+    }
+    .cart-section { width: 30%; background: #fff; border-left: 2px solid #e5e5e5; padding: 20px; display: flex; flex-direction: column; }
+    .cart-section h2 { margin-top: 0; text-align: center; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { padding: 8px; border-bottom: 1px solid #eee; text-align: center; }
+    .total { font-weight: bold; text-align: right; margin-top: 10px; font-size: 18px; }
+    input[type="email"] {
+      width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; margin-top: 10px;
+    }
+    button#confirmOrder {
+      background: #28a745; color: white; border: none; padding: 10px; border-radius: 8px;
+      margin-top: 10px; cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="sidebar">
+    <h2 style="text-align:center;">Select Hotel</h2>
+    <div class="shop-card" onclick="showMenu('A')">
+      <img src="https://cdn.justgotochef.com/uploads/1581782105-Annapoorna-Rasam%20Powder%20100g-Logo.jpg" alt="Annapoorna">
+      <h3>Annapoorna</h3>
+    </div>
+    <div class="shop-card" onclick="showMenu('B')">
+      <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSEpbLo6ciOGBX-2iDXMjNrmMQrIrhlmsj1fg&s" alt="KFC">
+      <h3>KFC</h3>
+    </div>
+  </div>
+
+  <div class="menu-section">
+    <h2 class="menu-title" id="shopTitle">Please select a shop</h2>
+    <div class="menu-grid" id="menuContainer"></div>
+  </div>
+
+  <div class="cart-section">
+    <h2>Your Bill</h2>
+    <table id="cartTable">
+      <thead><tr><th>Item</th><th>Qty</th><th>Price</th><th>Total</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <div class="total" id="totalAmount">Total: ₹0</div>
+    <input type="email" id="email" placeholder="Enter your email">
+    <button id="confirmOrder">Confirm Order</button>
+  </div>
+
+  <script>
+    const menus = {
+      "A": { title: "Annapoorna Menu", items: [
+        {name:"Dosa",price:20,img:"https://www.imagesarovar.in/wp-content/uploads/edd/2024/10/south-indian-food-dosa-png-vector-illustration-pre-fato5823.jpg"},
+        {name:"Idly",price:10,img:"https://png.pngtree.com/png-vector/20250506/ourmid/pngtree-south-indian-dish-idli-sambar-served-in-terracotta-plates-isolated-on-png-image_16168698.png"},
+        {name:"Vadai",price:8,img:"https://www.shutterstock.com/image-vector/crispy-hot-medu-vada-ulundu-260nw-2223927739.jpg"},
+        {name:"Chapathi",price:20,img:"https://img.freepik.com/premium-vector/freshly-baked-flatbread-stack-plate-perfect-delicious-meals_636501-286.jpg?semt=ais_hybrid&w=740&q=80"},
+        {name:"Poori",price:20,img:"https://pikturenama.com/wp-content/uploads/2017/08/Bedmi-Poori-logo-5.jpg"}]},
+      "B": { title: "KFC Menu", items: [
+        {name:"Pizza",price:120,img:"https://png.pngtree.com/png-vector/20250701/ourmid/pngtree-pizza-logo-transparent-image-free-for-online-download-png-image_16593606.webp"},
+        {name:"Burger",price:90,img:"https://static.vecteezy.com/system/resources/previews/049/434/492/non_2x/a-cartoon-illustration-of-a-juicy-delicious-burger-free-vector.jpg"},
+        {name:"Fries",price:60,img:"https://static.vecteezy.com/system/resources/previews/002/991/285/non_2x/french-fries-icon-isolated-illustration-free-vector.jpg"},
+        {name:"Pasta",price:100,img:"https://us.123rf.com/450wm/woters/woters1706/woters170600067/79660720-pasta-on-a-plate-vector-illustration-on-white.jpg?ver=6"},
+        {name:"Sandwich",price:70,img:"https://img.freepik.com/premium-vector/sandwich-with-vegetables-food-icon-vector-illustration_444196-2922.jpg"}]}
+    };
+
+    let cart = [];
+    function showMenu(shop) {
+      const menuData = menus[shop];
+      document.getElementById("shopTitle").innerText = menuData.title;
+      const menuContainer = document.getElementById("menuContainer");
+      menuContainer.innerHTML = "";
+      menuData.items.forEach(item => {
+        const div = document.createElement("div");
+        div.className = "item-card";
+        div.innerHTML = `
+          <img src="${item.img}" alt="${item.name}">
+          <h4>${item.name}</h4>
+          <p>₹${item.price}</p>
+          <div class="qty-controls">
+            <button onclick="changeQty('${item.name}', ${item.price}, -1)">−</button>
+            <span id="qty-${item.name}">0</span>
+            <button onclick="changeQty('${item.name}', ${item.price}, 1)">+</button>
+          </div>`;
+        menuContainer.appendChild(div);
+      });
+    }
+
+    function changeQty(name, price, delta) {
+      let existing = cart.find(i => i.name === name);
+      if (existing) {
+        existing.qty += delta;
+        if (existing.qty <= 0) cart = cart.filter(i => i.name !== name);
+      } else if (delta > 0) {
+        cart.push({name, price, qty: 1});
+      }
+      updateCart();
+    }
+
+    function updateCart() {
+      const tbody = document.querySelector("#cartTable tbody");
+      tbody.innerHTML = "";
+      let total = 0;
+      cart.forEach(item => {
+        const row = document.createElement("tr");
+        const subtotal = item.qty * item.price;
+        total += subtotal;
+        row.innerHTML = `<td>${item.name}</td><td>${item.qty}</td><td>₹${item.price}</td><td>₹${subtotal}</td>`;
+        tbody.appendChild(row);
+        const qtySpan = document.getElementById(`qty-${item.name}`);
+        if (qtySpan) qtySpan.innerText = item.qty;
+      });
+      document.getElementById("totalAmount").innerText = `Total: ₹${total}`;
+    }
+
+    document.getElementById("confirmOrder").addEventListener("click", async () => {
+      const email = document.getElementById("email").value.trim();
+      if (!email) return alert("Please enter your email address.");
+      if (cart.length === 0) return alert("Your cart is empty!");
+
+      const response = await fetch("/", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ order: cart, email })
+      });
+      const result = await response.json();
+      alert(result.message);
+      cart = [];
+      updateCart();
+      document.getElementById("email").value = "";
+      document.getElementById("menuContainer").innerHTML = "";
+      document.getElementById("shopTitle").innerText = "Please select a shop";
+    });
+  </script>
+</body>
+</html>
