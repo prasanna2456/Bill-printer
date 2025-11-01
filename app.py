@@ -43,8 +43,8 @@ def get_next_order_no():
 
 # Email Function
     def send_email(to_email, subject, html_body):
-    sender_email = "prasannaproject1245@gmail.com"
-    sender_password = "dibh lnce snog yvcr"  # Gmail app password
+    sender_email = "project1245@gmail.com"
+    sender_password = "dibh lnce serg XXXX"  # Gmail app password
 
     msg = MIMEMultipart("alternative")
     msg["From"] = sender_email
@@ -129,3 +129,4 @@ def index():
 if __name__ == "__main__":
 
     app.run(host="0.0.0.0", port=8080, debug=True)
+
