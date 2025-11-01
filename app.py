@@ -8,23 +8,23 @@ from email.mime.multipart import MIMEMultipart
 
 app = Flask(__name__)
 
-# ---------------- MQTT Setup ----------------
+# MQTT
 broker = "10.69.133.120"  # Use "localhost" if broker runs on same Pi
 port = 1883
 client = mqtt.Client(client_id="POS_Client", protocol=mqtt.MQTTv311)
 try:
     client.connect(broker, port, 60)
-    print("✅ MQTT Connected")
+    print("MQTT Connected")
 except Exception as e:
-    print("⚠️ MQTT connection failed:", e)
+    print(" MQTT connection failed:", e)
 
-# ---------------- Kitchen (Shop) Items ----------------
+
 kitchen_items = {
-    "Annapoorna": {"Dosa": 30, "Idly": 20, "Vadai": 15, "Chapathi": 25, "Poori": 30},
-    "KFC": {"Pizza": 120, "Burger": 90, "Fries": 60, "Pasta": 100, "Sandwich": 70}
+    "Annapoornai": {"Dosa": 30, "Idly": 20, "Vadai": 15, "Chapathi": 25, "Poori": 30},
+    "PFC": {"Pizza": 120, "Burger": 90, "Fries": 60, "Pasta": 100, "Sandwich": 70}
 }
 
-# ---------------- Order Number File ----------------
+#  Order Number
 order_file = "order_no.txt"
 
 def get_next_order_no():
@@ -41,8 +41,8 @@ def get_next_order_no():
         f.write(str(order_no))
     return order_no
 
-# ---------------- Email Function ----------------
-def send_email(to_email, subject, html_body):
+# Email Function
+    def send_email(to_email, subject, html_body):
     sender_email = "prasannaproject1245@gmail.com"
     sender_password = "dibh lnce snog yvcr"  # Gmail app password
 
@@ -57,11 +57,11 @@ def send_email(to_email, subject, html_body):
             server.starttls()
             server.login(sender_email, sender_password)
             server.sendmail(sender_email, to_email, msg.as_string())
-        print("✅ Email sent successfully!")
+        print(" Email sent successfully!")
     except Exception as e:
-        print("❌ Email sending failed:", e)
+        print(" Email sending failed:", e)
 
-# ---------------- Flask Routes ----------------
+# Flask Routes 
 @app.route("/", methods=["GET", "POST"])
 def index():
     if request.method == "POST":
@@ -95,13 +95,13 @@ def index():
                     </tr>
                     """
 
-        # Publish to MQTT
+        
         for stall, orders in kitchen_orders.items():
             if len(orders) > 1:
                 topic = f"kitchen/{stall.replace(' ', '_')}/orders"
                 client.publish(topic, json.dumps(orders))
 
-        # Prepare Email Bill
+        
         html_body = f"""
         <html>
         <body style="font-family: Arial, sans-serif;">
@@ -117,7 +117,7 @@ def index():
         </body>
         </html>
         """
-  # Send Email
+  
         if customer_email:
             send_email(customer_email, f"Order #{order_no} Confirmation", html_body)
 
@@ -127,4 +127,5 @@ def index():
 
 # ---------------- Run Flask ----------------
 if __name__ == "__main__":
+
     app.run(host="0.0.0.0", port=8080, debug=True)
